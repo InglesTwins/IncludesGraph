@@ -34,14 +34,20 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
     return headers, impls
 
 
+# NOTE: Do we want to make re.Pattern object a function parameter?
+# KI: No, but also don't want it to be a global variable. This screams classes
+#
+# match either the pattern `<...>` or `"..."`
+include_statement_pattern = re.compile
 def create_single_file_dependency_list(file: Path):
     """
-    TODO: Go through header files and implementation files and scan for `#include`
-          keyword, then maybe some regex to extract the file name.
-          For each file we go through, we create a list of the files required by
-          it.
-    NOTE: With C++20 and C++23 we will have to include import statements as well
-          But we leave this for future work
+    Go through header files and implementation files and scan for `#include`
+    keyword, then maybe some regex to extract the file name.
+    For each file we go through, we create a list of the files required by
+    it.
+
+    With C++20 and C++23 we will have to include import statements as well
+    But we leave this for future work
     
     :param file: path to C++ file in current project
     return: returns: a list of the files that `file` depends on
@@ -62,17 +68,21 @@ def create_single_file_dependency_list(file: Path):
                 if line.contains('/*'):
                     b_is_block_comment = True
                     continue
-                elif line.split() == '//':
+                elif line.strip()[0:2] == '//':
                     continue
-                elif line.split()[0] == '#include':
-                    # match either the pattern `<...>` or `"..."`
-                    # re.findall will return a list of tuples `[(pattern 1, pattern 2), ...]`
-                    re_match = re.findall(r"<(.+?.)>|\"(.+?.)\"", line.split()[1])[0]
+                elif line.split()[0] in ('#include', '%:include'):
+                    # we always expect the included file to be given second (required
+                    # by standards)
+                    re_match = include_statement_pattern.match(line.split()[1])
                     # We only expect one entry in the list
-                    if not re_match[0]: # first matching group is empty
+                    if re_match: # first matching group is empty
                         continue
                     else:
-                        include_statements.append(re_match[0])
-                else:
-                    continue
+                        if not re_match.group(1): # Check if match with `<...>` is empty
+                            include_statements.append(re_match.group(2))
+                        else: # since we have a match and first group is non-empty we
+                              # apend
+                            include_statements.append(re_match.group(1))
+                    else:
+                        continue
         return include_statements
