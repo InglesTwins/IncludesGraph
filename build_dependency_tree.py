@@ -4,7 +4,11 @@ import sys
 import re
 from pathlib import Path
 from typing import Optional
+<<<<<<< HEAD
 from typing import List
+=======
+from typing import List, Dict
+>>>>>>> Generate Project Dependencies
 
 
 def extract_files_from_directory():
@@ -39,7 +43,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
 #
 # match either the pattern `<...>` or `"..."`
 include_statement_pattern = re.compile
-def create_single_file_dependency_list(file: Path):
+def create_single_file_dependency_list(file: Union[Path, str]):
     """
     Go through header files and implementation files and scan for `#include`
     keyword, then maybe some regex to extract the file name.
@@ -86,3 +90,34 @@ def create_single_file_dependency_list(file: Path):
                     else:
                         continue
         return include_statements
+
+
+def output_dependency_tree_to_dot_file(dep_tree: Dict[List[Union[Path, str]]], output_name: Optional[Union[Path, str]]):
+    """
+    Goes through dictionary of files gathered from recursive search of directory and prints all
+    the nodes it will be attached to in file named output_name.
+    Output is formated to be compatible with the DOT command line program: https://graphviz.org/doc/info/lang.html
+
+    :param dep_tree: dictionary with files in project as keys and list of their dependencies as value
+    :param output_name: name of output file or path to output file 
+    """
+    if not isinstance(dep_tree, dict):
+        # For cleaner debugging messages, only keep while still developing program
+        print("None dictionary object passed.")
+        quit()
+
+    if not output_name:
+        output_name = 'includes_tree_output.dot'
+    
+    # TODO: Need to colorize output. 
+    #       E.g. header files are blue, translation units red
+    #       Standard Template Library files are different shaped bubbles, etc
+    #       Of course this will require a key of some sort to be documentd somewhere
+    with open(output_name) as f:
+        for key, dep_list in dep_tree.items():
+            for entry in dep_list:
+                f.write(f"\"{key}\" -- \"{entry}\";\n")
+
+
+def generate_dependency_tree(files_in_project: List[Path]):
+    pass
