@@ -114,9 +114,11 @@ def output_dependency_tree_to_dot_file(dep_tree: Dict[List[Union[Path, str]]], o
     #       Standard Template Library files are different shaped bubbles, etc
     #       Of course this will require a key of some sort to be documentd somewhere
     with open(output_name) as f:
+        f.write("graph {\n")
         for key, dep_list in dep_tree.items():
             for entry in dep_list:
                 f.write(f"\"{key}\" -- \"{entry}\";\n")
+        f.write("}")
 
 
 def generate_dependency_tree(files_in_project: List[Path]):
