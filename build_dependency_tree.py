@@ -3,14 +3,22 @@
 import sys
 import re
 from pathlib import Path
+from typing import Optional
 from typing import List
 
-args = [arg for arg in sys.argv]
-files_in_dir = [
-    [file for file in Path(root).glob('*') # TODO: Make recursive search 
-     if file.suffix in ('h', 'hpp', 'c', 'cpp')]
-    for root in args
-]
+
+def extract_files_from_directory():
+    """FUnction recurses through the directory to find all file-like objects"""
+
+    def extract_files(dir_or_file: Path, list_o_files: List[Optional[Path]]):
+        if dir_or_file.is_dir():
+            for path in dir_or_file.glob("*"):
+                extract_files(path, list_o_files)
+        else:
+            list_o_files.append(dir_or_file)
+
+    return [extract_files(Path(arg), []) for arg in sys.argv]
+
 
 def separate_headers_and_implementations(files_in_dir: List[Path]):
     """ 
@@ -24,6 +32,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
     headers = [file for file in files_in_dir if file.suffix in ('h', 'hpp')]
     impls = [file for file in files_in_dir if file.suffix in ('c', 'cpp')]
     return headers, impls
+
 
 def create_single_file_dependency_list(file: Path):
     """
@@ -55,7 +64,7 @@ def create_single_file_dependency_list(file: Path):
                     continue
                 elif line.split() == '//':
                     continue
-                elif line.split()[0] = '#include':
+                elif line.split()[0] == '#include':
                     # match either the pattern `<...>` or `"..."`
                     # re.findall will return a list of tuples `[(pattern 1, pattern 2), ...]`
                     re_match = re.findall(r"<(.+?.)>|\"(.+?.)\"", line.split()[1])[0]
@@ -67,6 +76,3 @@ def create_single_file_dependency_list(file: Path):
                 else:
                     continue
         return include_statements
-
-
-        
