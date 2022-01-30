@@ -5,25 +5,20 @@ import re
 from pathlib import Path
 from typing import Optional
 from typing import List
-from typing import Union
-
-args: List[Union[bytes, str]] = [arg for arg in sys.argv]
-files_in_project = []
 
 
-def extract_files_from_directory(
-        dir_or_file: Path, list_o_files: List[Optional[Path]]
-):
+def extract_files_from_directory():
     """FUnction recurses through the directory to find all file-like objects"""
-    if dir_or_file.is_dir():
-        for path in dir_or_file.glob("*"):
-            extract_files_from_directory(path, list_o_files)
-    else:
-        list_o_files.append(dir_or_file)
 
+    def extract_files(dir_or_file: Path, list_o_files: List[Optional[Path]]):
+        if dir_or_file.is_dir():
+            for path in dir_or_file.glob("*"):
+                extract_files(path, list_o_files)
+        else:
+            list_o_files.append(dir_or_file)
 
-for arg in args:
-    extract_files_from_directory(arg, files_in_project)
+    return [extract_files(Path(arg), []) for arg in sys.argv]
+
 
 def separate_headers_and_implementations(files_in_dir: List[Path]):
     """ 
@@ -37,6 +32,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
     headers = [file for file in files_in_dir if file.suffix in ('h', 'hpp')]
     impls = [file for file in files_in_dir if file.suffix in ('c', 'cpp')]
     return headers, impls
+
 
 def create_single_file_dependency_list(file: Path):
     """
