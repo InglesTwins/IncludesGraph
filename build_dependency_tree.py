@@ -28,9 +28,8 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
     """ 
     Separates files from current directory into header and implementation files.
     
-    :param files_in_dir: List of paths to files C++ files in current directory
-    
-    return: returns: tuple of list containing paths to the header files in 
+    :param files_in_dir:    List of paths to files C++ files in current directory
+    return: returns:        tuple of list containing paths to the header files in 
     first slot and implementation files in the second
     """
     headers = [file for file in files_in_dir if file.suffix in ('h', 'hpp')]
@@ -53,8 +52,8 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     With C++20 and C++23 we will have to include import statements as well
     But we leave this for future work
     
-    :param file: path to C++ file in current project
-    return: returns: a list of the files that `file` depends on
+    :param file:        path to C++ file in current project
+    return: returns:    a list of the files that `file` depends on
     """
     with open(file) as f:
         # some files may have macros that check for operatoring system or 
@@ -92,13 +91,19 @@ def create_single_file_dependency_list(file: Union[Path, str]):
         return include_statements
 
 
-def output_dependency_tree_to_dot_file(dep_tree: Dict[List[Union[Path, str]]], output_name: Optional[Union[Path, str]]):
+def output_dependency_tree_to_dot_file(
+        dep_tree: Dict[List[Union[Path, str]]], 
+        output_name: Optional[Union[Path, str]]
+    ):
     """
-    Goes through dictionary of files gathered from recursive search of directory and prints all
-    the nodes it will be attached to in file named output_name.
-    Output is formated to be compatible with the DOT command line program: https://graphviz.org/doc/info/lang.html
+    Goes through dictionary of files gathered from recursive search of 
+    directory and prints all the nodes it will be attached to in file 
+    named output_name.
+    Output is formated to be compatible with the DOT command line program: 
+    https://graphviz.org/doc/info/lang.html
 
-    :param dep_tree: dictionary with files in project as keys and list of their dependencies as value
+    :param dep_tree:    dictionary with files in project as keys and list 
+                        of their dependencies as value
     :param output_name: name of output file or path to output file 
     """
     if not isinstance(dep_tree, dict):
