@@ -4,11 +4,7 @@ import sys
 import re
 from pathlib import Path
 from typing import Optional
-<<<<<<< HEAD
-from typing import List
-=======
 from typing import List, Dict
->>>>>>> Generate Project Dependencies
 
 
 def extract_files_from_directory():
