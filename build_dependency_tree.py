@@ -19,7 +19,7 @@ def extract_files_from_directory():
 
     return [extract_files(Path(arg), []) for arg in sys.argv]
 
-
+# I think we can get rid of thise function
 def separate_headers_and_implementations(files_in_dir: List[Path]):
     """ 
     Separates files from current directory into header and implementation files.
@@ -122,5 +122,22 @@ def output_dependency_tree_to_dot_file(
         f.write("}")
 
 
-def generate_dependency_tree(files_in_project: List[Path]):
-    pass
+def generate_dependency_tree(files_in_project: List[Path], keep_std_files: bool=True):
+    """
+    Creates a dictionary with file name as key and its dependency tree as the value
+
+    :param files_in_project:    all C++ files in provided directory and subdirectories
+    :param keep_std_files:      flag to determine whether to track C/C++ standarad
+                                files
+
+    :returns return: dictionary of files which project specific files depend on
+    """
+    with open("utils/C_std_headers.txt",'r') as f:
+        C_std_files = [line.strip() for line in f.readlines()] # strip to remove '\n' char
+    with open("utils/Cpp_std_headers.txt",'r') as f:
+        Cpp_std_files = [line.strip() for line in f.readlines()]
+    return dict(
+                (file, create_single_file_dependency_list(file))
+                for file in files_in_project
+                if (not file in [*C_std_files, *Cpp_std_fiels]) or keep_std_files # complicated logica D=
+            )
