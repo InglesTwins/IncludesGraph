@@ -4,7 +4,7 @@
 // Description: Calls Header.cpp to test include graph program
 
 
-#include "Header.cpp"
+#include <Header.hpp>
 
 int main()
 {
