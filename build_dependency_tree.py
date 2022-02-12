@@ -11,7 +11,7 @@ def extract_files_from_directory():
     """FUnction recurses through the directory to find all file-like objects"""
 
     def is_cpp_file(file: Union[Path, str]):
-        file_types = ('c', 'cpp', 'cxx', 'C', 'h', 'hpp', 'hxx')
+        file_types = ('.c', '.cpp', '.cxx', '.C', '.h', '.hpp', '.hxx')
         return_value = False
         for file_type in file_types:
             return_value = return_value or file_type in str(file)
@@ -59,7 +59,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
 # KI: No, but also don't want it to be a global variable. This screams classes
 #
 # match either the pattern `<...>` or `"..."`
-include_statement_pattern = re.compile(r"<.+?>|\".+?\"")
+include_statement_pattern = re.compile(r"(<.+?>)|(\".+?\")")
 
 
 def create_single_file_dependency_list(file: Union[Path, str]):
@@ -75,6 +75,14 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     :param file:        path to C++ file in current project
     return: returns:    a list of the files that `file` depends on
     """
+    # For some reason does not drop the <> or " when matching
+    # so we write a helper
+    def extract_header_file_name(text: Optional[str]):
+        if text:
+            return text[1:len(text)-1]
+        else:
+            return None
+
     with open(str(file.absolute())) as f:
         # some files may have macros that check for operatoring system or
         # compiler compatibilities. For now we ignore these as well.
@@ -82,8 +90,9 @@ def create_single_file_dependency_list(file: Union[Path, str]):
         include_statements = []
         b_is_block_comment = False  # Lines that start with /*
         for line in f.readlines():
+            print(f"{line.strip()}")
             if b_is_block_comment:
-                if line.split()[0] == '*/':
+                if '*/' in line:
                     b_is_block_comment = False
                 else:
                     continue
@@ -91,7 +100,9 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                 if '/*' in line:
                     b_is_block_comment = True
                     continue
-                elif line.strip(' ')[0:2] == '//':
+                elif line.replace(' ', '')[0:2] == '//':
+                    continue
+                elif not line:  # empty line
                     continue
                 elif line.replace(' ', '')[0:8] == '#include' or \
                         line.replace(' ', '')[0:9] == '%:include':
@@ -99,20 +110,24 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                     # (required by standards)
                     re_match = include_statement_pattern.match(line.split()[1])
                     # We only expect one entry in the list
-                    if re_match:  # first matching group is empty
-                        print(f'No header files found: {file}')
+                    if not re_match:  # first matching group is empty
+                        print(f'No header files found in line: {line}')
                         continue
                     elif not re_match.group(1):
-                        # Check if match with `<...>` is empty
+                        # Check if match with `<...>` is None
                         print(f"""Header file found
                                 {str(file.absolute())}:{re_match.group(2)}""")
-                        include_statements.append(re_match.group(2))
+                        include_statements.append(
+                                extract_header_file_name(
+                                    re_match.group(2)))
                     else:
                         # since we have a match and first group is non-empty we
                         # apend
                         print(f"""Header file found
                                 {str(file.absolute())}:{re_match.group(1)}""")
-                        include_statements.append(re_match.group(1))
+                        include_statements.append(
+                                extract_header_file_name(
+                                    re_match.group(1)))
         return include_statements
 
 
@@ -178,7 +193,7 @@ def generate_dependency_tree(
                 ]  # strip to remove '\n' char
     with open(f"{str(pwd)}/util/Cpp_std_headers.txt", 'r') as f:
         cpp_std_files = [
-                line.strip() 
+                line.strip()
                 for line in f.readlines()
                 if line]
     return dict(
