@@ -93,36 +93,34 @@ def create_single_file_dependency_list(file: Union[Path, str]):
             print(f"{line.strip()}")
             if b_is_block_comment and '*/' in line:
                 b_is_block_comment = False
-                elif '/*' in line:
-                    b_is_block_comment = True
-                elif line.replace(' ', '')[0:2] == '//':
+            elif line.replace(' ', '')[0:2] == '//':
+                continue
+            elif not line:  # empty line
+                continue
+            elif line.replace(' ', '').startswith('#include') or \
+                    line.replace(' ', '').startswith('%:include'):
+                # we always expect the included file to be given second
+                # (required by standards)
+                re_match = include_statement_pattern.search(line)
+                # We only expect one entry in the list
+                if not re_match:  # first matching group is empty
+                    print(f'No header files found in line: {line}')
                     continue
-                elif not line:  # empty line
-                    continue
-                elif line.replace(' ', '')[0:8] == '#include' or \
-                        line.replace(' ', '')[0:9] == '%:include':
-                    # we always expect the included file to be given second
-                    # (required by standards)
-                    re_match = include_statement_pattern.search(line)
-                    # We only expect one entry in the list
-                    if not re_match:  # first matching group is empty
-                        print(f'No header files found in line: {line}')
-                        continue
-                    elif not re_match.group(1):
-                        # Check if match with `<...>` is None
-                        print(f"""Header file found
-                                {str(file.absolute())}:{re_match.group(2)}""")
-                        include_statements.append(
-                                extract_header_file_name(
-                                    re_match.group(2)))
-                    else:
-                        # since we have a match and first group is non-empty we
-                        # apend
-                        print(f"""Header file found
-                                {str(file.absolute())}:{re_match.group(1)}""")
-                        include_statements.append(
-                                extract_header_file_name(
-                                    re_match.group(1)))
+                elif not re_match.group(1):
+                    # Check if match with `<...>` is None
+                    print(f"""Header file found
+                            {str(file.absolute())}:{re_match.group(2)}""")
+                    include_statements.append(
+                            extract_header_file_name(
+                                re_match.group(2)))
+                else:
+                    # since we have a match and first group is non-empty we
+                    # apend
+                    print(f"""Header file found
+                            {str(file.absolute())}:{re_match.group(1)}""")
+                    include_statements.append(
+                            extract_header_file_name(
+                                re_match.group(1)))
         return include_statements
 
 
@@ -158,7 +156,10 @@ def output_dependency_tree_to_dot_file(
     #       somewhere
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
-       _ = [[f.wtite(f'"{key}" -- "{entry}";\n') for entry in dep_list] for key, dep_list in dep_tree.items()]
+        _ = [[
+            f.wtite(f'"{key}" -- "{entry}";\n') 
+            for entry in dep_list] 
+            for key, dep_list in dep_tree.items()]
         f.write("}")
 
 
@@ -179,14 +180,14 @@ def generate_dependency_tree(
     """
     pwd = Path(__file__).absolute().parent
     for child in pwd.glob("util/*"):
-       with open)f"{pwd}/{child}, 'r') as f:
-           std_files = [
+        with open(f"{pwd}/{child}", 'r') as f:
+            std_files = [
                line.strip()
                for line in f.readlines()
                if line
                ]  # strip to remove '\n' char
     return {
-        str(file):creat_single_file_dependency_list(file) 
-        for file in files_in_project 
+        str(file): create_single_file_dependency_list(file)
+        for file in files_in_project
         if file not in std_files or keep_std_files
     }
