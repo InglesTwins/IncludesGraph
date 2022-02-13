@@ -6,27 +6,30 @@ from pathlib import Path
 from typing import Optional, Union
 from typing import List, Dict
 
+# TODO: Move current print statements to a log output file
+
 
 def extract_files_from_directory():
     """FUnction recurses through the directory to find all file-like objects"""
 
     def is_cpp_file(file: Union[Path, str]):
-        file_types = ('.c', '.cpp', '.cxx', '.C', '.h', '.hpp', '.hxx')
+        file_types = ('.c', '.cc', '.cpp', '.cxx', '.c++', '.C',
+                      '.h', '.hh', '.hpp', '.hxx', '.H', '.h++')
         return_value = False
         for file_type in file_types:
-            return_value = return_value or file_type in str(file)
+            return_value = return_value or file.endswith(file_type)
             if return_value:
                 return True
         return False
 
     def extract_files(dir_or_file: Path, list_o_files: List[Optional[Path]]):
         if dir_or_file.is_dir():
-            print(f'In dir: {str(dir_or_file.absolute())}')
+            # print(f'In dir: {str(dir_or_file.absolute())}')
             for path in dir_or_file.glob("*"):
                 extract_files(path, list_o_files)
         else:
             if is_cpp_file(dir_or_file.name):
-                print(f'Appending file: {str(dir_or_file.absolute())}')
+                # print(f'Appending file: {str(dir_or_file.absolute())}')
                 list_o_files.extend([dir_or_file])
         return list_o_files
 
@@ -65,7 +68,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     # so we write a helper
     def extract_header_file_name(text: Optional[str]):
         if text:
-            return text[1:len(text)-1]
+            return text[1:len(text)-1].replace('../', '')
         else:
             return None
 
@@ -76,7 +79,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
         include_statements = []
         b_is_block_comment = False  # Lines that start with /*
         for line in f.readlines():
-            print(f"{line.strip()}")
+            # print(f"{line.strip()}")
             if b_is_block_comment:
                 if '*/' in line:
                     b_is_block_comment = False
@@ -94,23 +97,23 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                         line.replace(' ', '')[0:9] == '%:include':
                     # we always expect the included file to be given second
                     # (required by standards)
-                    re_match = include_statement_pattern.match(line.split()[1])
+                    re_match = include_statement_pattern.search(line)
                     # We only expect one entry in the list
                     if not re_match:  # first matching group is empty
-                        print(f'No header files found in line: {line}')
+                        # print(f'No header files found in line: {line}')
                         continue
                     elif not re_match.group(1):
                         # Check if match with `<...>` is None
-                        print(f"""Header file found
-                                {str(file.absolute())}:{re_match.group(2)}""")
+                        # print(f"""Header file found
+                        #         {str(file.absolute())}:{re_match.group(2)}""")
                         include_statements.append(
                                 extract_header_file_name(
                                     re_match.group(2)))
                     else:
                         # since we have a match and first group is non-empty we
                         # apend
-                        print(f"""Header file found
-                                {str(file.absolute())}:{re_match.group(1)}""")
+                        # print(f"""Header file found
+                        #         {str(file.absolute())}:{re_match.group(1)}""")
                         include_statements.append(
                                 extract_header_file_name(
                                     re_match.group(1)))
@@ -140,7 +143,7 @@ def output_dependency_tree_to_dot_file(
     if not output_name:
         output_name = Path('./includes_tree_output.dot').absolute()
 
-    print(f'Output file is: {str(output_name)}')
+    # print(f'Output file is: {str(output_name)}')
 
     # TODO: Need to colorize output.
     #       E.g. header files are blue, translation units red
@@ -151,7 +154,7 @@ def output_dependency_tree_to_dot_file(
         f.write("graph {\n")
         for key, dep_list in dep_tree.items():
             for entry in dep_list:
-                f.write(f"\"{key}\" -- \"{entry}\";\n")
+                f.write(f"\t\"{key}\" -- \"{entry}\";\n")
         f.write("}")
 
 
@@ -172,23 +175,64 @@ def generate_dependency_tree(
     """
     pwd = Path(__file__).absolute().parent
     with open(f"{str(pwd)}/util/C_std_headers.txt", 'r') as f:
-        c_std_files = [
+        std_files = [
                 line.strip()
                 for line in f.readlines()
                 if line
                 ]  # strip to remove '\n' char
     with open(f"{str(pwd)}/util/Cpp_std_headers.txt", 'r') as f:
-        cpp_std_files = [
+        std_files.extend([
                 line.strip()
                 for line in f.readlines()
-                if line]
+                if line])
+
     # reverse string from header file and keep only the matching string
     # for both the header files in the files and the file paths stored
     # this can be a very time sensitive process as we would have to
     # checl ALL paths
-    return dict(
-                (file, create_single_file_dependency_list(file))
+    def match_headers_with_found_headers(
+            dependency_tree: Dict[str, List[str]]):
+        """Helper function to avoid file duplication in dependency tree"""
+        set_of_headers = set()
+        for key, value in dependency_tree.items():
+            set_of_headers.update(value)
+
+        print(set_of_headers)
+
+        # list of header files as they actually appear in property
+        key_for_headers = {}
+        for key in dependency_tree.keys():
+            print(f"Comparing file: {key}")
+            if '.c' in str(key).lower():
+                print("File is a translation unit")
+                key_for_headers[str(key)] = str(key)
+            else:
+                b_matched = False
+                for header in set_of_headers:
+                    if str(key).endswith(header):
+                        # Seems we need to create some sort of class that
+                        # stores whether a specific header has already been
+                        # matched
+                        b_matched = True
+                        print("File matched to existing header")
+                        if str(key) in key_for_headers:
+                            print(f"""Header file {key} is duplicated, previous
+                                  value has been overwitten""")
+                        key_for_headers[str(key)] = str(key)[-len(header):]
+                if not b_matched:
+                    key_for_headers[str(key)] = str(key)
+
+        return key_for_headers
+
+    temp_dict = dict(
+                (str(file), create_single_file_dependency_list(file))
                 for file in files_in_project
-                if (file not in [*c_std_files, *cpp_std_files])
+                if file not in std_files
                 or keep_std_files  # complicated logic
             )
+    converter = match_headers_with_found_headers(temp_dict)
+    return dict(
+            (converter[str(key)], temp_dict[str(key)])
+            for key in temp_dict.keys()
+            # only keep track of headers actually used
+            if str(key) in converter.keys())
