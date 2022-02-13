@@ -58,7 +58,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
 # NOTE: Do we want to make re.Pattern object a function parameter?
 # KI: No, but also don't want it to be a global variable. This screams classes
 #
-# match either the pattern `<...>` or `"..."`
+# Pattern object to match either `<...>` or `"..."`
 include_statement_pattern = re.compile(r"(<.+?>)|(\".+?\")")
 
 
@@ -73,7 +73,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     But we leave this for future work
 
     :param file:        path to C++ file in current project
-    return: returns:    a list of the files that `file` depends on
+    :returns:    a list of the files that `file` depends on
     """
     # For some reason does not drop the <> or " when matching
     # so we write a helper
@@ -91,15 +91,10 @@ def create_single_file_dependency_list(file: Union[Path, str]):
         b_is_block_comment = False  # Lines that start with /*
         for line in f.readlines():
             print(f"{line.strip()}")
-            if b_is_block_comment:
-                if '*/' in line:
-                    b_is_block_comment = False
-                else:
-                    continue
-            else:
-                if '/*' in line:
+            if b_is_block_comment and '*/' in line:
+                b_is_block_comment = False
+                elif '/*' in line:
                     b_is_block_comment = True
-                    continue
                 elif line.replace(' ', '')[0:2] == '//':
                     continue
                 elif not line:  # empty line
@@ -108,7 +103,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                         line.replace(' ', '')[0:9] == '%:include':
                     # we always expect the included file to be given second
                     # (required by standards)
-                    re_match = include_statement_pattern.match(line.split()[1])
+                    re_match = include_statement_pattern.search(line)
                     # We only expect one entry in the list
                     if not re_match:  # first matching group is empty
                         print(f'No header files found in line: {line}')
@@ -163,9 +158,7 @@ def output_dependency_tree_to_dot_file(
     #       somewhere
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
-        for key, dep_list in dep_tree.items():
-            for entry in dep_list:
-                f.write(f"\"{key}\" -- \"{entry}\";\n")
+       _ = [[f.wtite(f'"{key}" -- "{entry}";\n') for entry in dep_list] for key, dep_list in dep_tree.items()]
         f.write("}")
 
 
@@ -185,20 +178,15 @@ def generate_dependency_tree(
     :returns return: dictionary of files which project specific files depend on
     """
     pwd = Path(__file__).absolute().parent
-    with open(f"{str(pwd)}/util/C_std_headers.txt", 'r') as f:
-        c_std_files = [
-                line.strip()
-                for line in f.readlines()
-                if line
-                ]  # strip to remove '\n' char
-    with open(f"{str(pwd)}/util/Cpp_std_headers.txt", 'r') as f:
-        cpp_std_files = [
-                line.strip()
-                for line in f.readlines()
-                if line]
-    return dict(
-                (file, create_single_file_dependency_list(file))
-                for file in files_in_project
-                if (file not in [*c_std_files, *cpp_std_files])
-                or keep_std_files  # complicated logic
-            )
+    for child in pwd.glob("util/*"):
+       with open)f"{pwd}/{child}, 'r') as f:
+           std_files = [
+               line.strip()
+               for line in f.readlines()
+               if line
+               ]  # strip to remove '\n' char
+    return {
+        str(file):creat_single_file_dependency_list(file) 
+        for file in files_in_project 
+        if file not in std_files or keep_std_files
+    }
