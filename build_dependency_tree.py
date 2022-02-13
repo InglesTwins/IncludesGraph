@@ -79,21 +79,16 @@ def create_single_file_dependency_list(file: Union[Path, str]):
         include_statements = []
         b_is_block_comment = False  # Lines that start with /*
         for line in f.readlines():
-            print(f"{line.strip()}")
-            if b_is_block_comment and '*/' in line:
+            if b_is_block_comment and line.endswith('*/'):
                 b_is_block_comment = False
-            elif line.replace(' ', '')[0:2] == '//':
-                continue
-            elif not line:  # empty line
+            elif line.startswith('//') or not line:
                 continue
             elif line.replace(' ', '').startswith('#include') or \
                     line.replace(' ', '').startswith('%:include'):
-                # we always expect the included file to be given second
-                # (required by standards)
+
                 re_match = include_statement_pattern.search(line)
-                # We only expect one entry in the list
-                if not re_match:  # first matching group is empty
-                    print(f'No header files found in line: {line}')
+
+                if not re_match:  # no matches found
                     continue
                 elif not re_match.group(1):
                     # Check if match with `<...>` is None
@@ -104,7 +99,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                                 re_match.group(2)))
                 else:
                     # since we have a match and first group is non-empty we
-                    # apend
+                    # append
                     print(f"""Header file found
                             {str(file.absolute())}:{re_match.group(1)}""")
                     include_statements.append(
@@ -146,8 +141,8 @@ def output_dependency_tree_to_dot_file(
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
         _ = [[
-            f.wtite(f'"{key}" -- "{entry}";\n') 
-            for entry in dep_list] 
+            f.write(f'\t"{key}" -- "{entry}";\n')
+            for entry in dep_list]
             for key, dep_list in dep_tree.items()]
         f.write("}")
 
@@ -180,10 +175,6 @@ def generate_dependency_tree(
                 for line in f.readlines()
                 if line])
 
-    # reverse string from header file and keep only the matching string
-    # for both the header files in the files and the file paths stored
-    # this can be a very time sensitive process as we would have to
-    # checl ALL paths
     def match_headers_with_found_headers(
             dependency_tree: Dict[str, List[str]]):
         """Helper function to avoid file duplication in dependency tree"""
@@ -193,7 +184,7 @@ def generate_dependency_tree(
 
         print(set_of_headers)
 
-        # list of header files as they actually appear in property
+        # conversion to header files as they actually appear in code
         key_for_headers = {}
         for key in dependency_tree.keys():
             print(f"Comparing file: {key}")
@@ -214,6 +205,7 @@ def generate_dependency_tree(
                                   value has been overwitten""")
                         key_for_headers[str(key)] = str(key)[-len(header):]
                 if not b_matched:
+                    print(f"File: {key} not matched to any include statement")
                     key_for_headers[str(key)] = str(key)
 
         return key_for_headers
