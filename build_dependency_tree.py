@@ -64,13 +64,6 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     :param file:        path to C++ file in current project
     :returns:    a list of the files that `file` depends on
     """
-    # For some reason does not drop the <> or " when matching
-    # so we write a helper
-    def extract_header_file_name(text: Optional[str]):
-        if text:
-            return text[1:len(text)-1].replace('../', '')
-        else:
-            return None
 
     with open(str(file.absolute())) as f:
         # some files may have macros that check for operatoring system or
@@ -94,17 +87,13 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                     # Check if match with `<...>` is None
                     print(f"""Header file found
                             {str(file.absolute())}:{re_match.group(2)}""")
-                    include_statements.append(
-                            extract_header_file_name(
-                                re_match.group(2)))
+                    include_statements.append(re_match.group(2)[1:-1])
                 else:
                     # since we have a match and first group is non-empty we
                     # append
                     print(f"""Header file found
                             {str(file.absolute())}:{re_match.group(1)}""")
-                    include_statements.append(
-                            extract_header_file_name(
-                                re_match.group(1)))
+                    include_statements.append(re_match.group(1)[1:-1])
     return include_statements
 
 
