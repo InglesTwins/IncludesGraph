@@ -109,7 +109,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
 
 
 def output_dependency_tree_to_dot_file(
-        dep_tree: Dict[List[Union[Path, str]], str],
+        dep_tree: Dict[Union[Path, str], List[Union[Path, str]]],
         output_name: Optional[Union[Path, str]]):
     """
     Goes through dictionary of files gathered from recursive search of
