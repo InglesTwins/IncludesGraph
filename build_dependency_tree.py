@@ -35,24 +35,10 @@ def extract_files_from_directory():
                 item for sublist in lists for item in sublist
                 if len(sublist) > 0]
 
+    # We want to keep track of how to get to the file
+    # therefore we keep the path to the file
     return flatten_list(
             [extract_files(Path(arg), []) for arg in sys.argv])
-
-
-# I think we can get rid of thise function
-def separate_headers_and_implementations(files_in_dir: List[Path]):
-    """
-    Separates files from current directory into header and implementation files
-
-    :param files_in_dir:    List of paths to files C++ files in current
-                            directory
-    return: returns:        tuple of list containing paths to the header files
-                            in first slot and implementation files in the
-                            second
-    """
-    headers = [file for file in files_in_dir if file.suffix in ('h', 'hpp')]
-    impls = [file for file in files_in_dir if file.suffix in ('c', 'cpp')]
-    return headers, impls
 
 
 # NOTE: Do we want to make re.Pattern object a function parameter?
@@ -196,6 +182,10 @@ def generate_dependency_tree(
                 line.strip()
                 for line in f.readlines()
                 if line]
+    # reverse string from header file and keep only the matching string
+    # for both the header files in the files and the file paths stored
+    # this can be a very time sensitive process as we would have to
+    # checl ALL paths
     return dict(
                 (file, create_single_file_dependency_list(file))
                 for file in files_in_project
