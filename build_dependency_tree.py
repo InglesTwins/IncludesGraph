@@ -4,17 +4,39 @@ import sys
 import re
 from pathlib import Path
 from typing import Optional, Union
-from typing import List, Dict
+from typing import List, Dict, Set
+from io import TextIOWrapper
 
 # TODO: Move current print statements to a log output file
+# TODO: Use uniform function argument list style
+
+# IDEA: We can keep the entire directory structure stored for the project
+#       and then determine a metric to compare how well a given file matches
+#       with a file of the same name in multiple directories
 
 
-def extract_files_from_directory():
+class CppFileObject():  # FIXME: I belong in a separate file
+    """
+    This acts simply as a way to encapsulate cpp files
+    Cpp files are distinguished by the path to the file.
+    This helps resolve ambiguities for files with the same name but in 
+    different directories when making the dependency tree
+    """
+
+    def __init__(self, path_to_file: Path, file_name: str) -> None:
+        self.path_to_file = path_to_file
+        self.file_name = file_name
+
+    def open(self) -> TextIOWrapper:
+        return open(str(self.path_to_file) + '/' + self.file_name, 'r')
+
+
+def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
     """FUnction recurses through the directory to find all file-like objects"""
 
-    def is_cpp_file(file: Union[Path, str]):
+    def is_cpp_file(file: Union[Path, str]) -> bool:
         file_types = ('.c', '.cc', '.cpp', '.cxx', '.c++', '.C',
-                      '.h', '.hh', '.hpp', '.hxx', '.H', '.h++')
+                      '.h', '.hh', '.hpp', '.hxx', '.h++', '.H')
         return_value = False
         for file_type in file_types:
             return_value = return_value or file.endswith(file_type)
@@ -22,26 +44,30 @@ def extract_files_from_directory():
                 return True
         return False
 
-    def extract_files(dir_or_file: Path, list_o_files: List[Optional[Path]]):
+    def extract_files(dir_or_file: Path,
+                      set_o_files: Set[CppFileObject]
+                      ) -> Set[CppFileObject]:
         if dir_or_file.is_dir():
             # print(f'In dir: {str(dir_or_file.absolute())}')
             for path in dir_or_file.glob("*"):
-                extract_files(path, list_o_files)
+                extract_files(path, set_o_files)
         else:
             if is_cpp_file(dir_or_file.name):
                 # print(f'Appending file: {str(dir_or_file.absolute())}')
-                list_o_files.extend([dir_or_file])
-        return list_o_files
+                set_o_files.update([CppFileObject(dir_or_file.parent,
+                                                  dir_or_file.name)])
+        return set_o_files
 
-    def flatten_list(lists: Optional[List[List]]):
-        return [
-                item for sublist in lists for item in sublist
-                if len(sublist) > 0]
+    def flatten_set(
+                     lists: Optional[Set[CppFileObject]]
+                     ) -> List[CppFileObject]:
+        return (item for sublist in lists for item in sublist
+                if len(sublist) > 0)
 
     # We want to keep track of how to get to the file
     # therefore we keep the path to the file
-    return flatten_list(
-            [extract_files(Path(arg), []) for arg in sys.argv])
+    return flatten_set(
+            [extract_files(Path(directory), {}) for directory in set_o_dirs])
 
 
 # NOTE: Do we want to make re.Pattern object a function parameter?
@@ -51,7 +77,9 @@ def extract_files_from_directory():
 include_statement_pattern = re.compile(r"(<.+?>)|(\".+?\")")
 
 
-def create_single_file_dependency_list(file: Union[Path, str]):
+def create_single_file_dependency_list(
+        file: CppFileObject
+     ) -> Set[CppFileObject]:
     """
     Go through header files and implementation files and scan for `#include`
     keyword, then maybe some regex to extract the file name.
@@ -65,11 +93,11 @@ def create_single_file_dependency_list(file: Union[Path, str]):
     :returns:    a list of the files that `file` depends on
     """
 
-    with open(str(file.absolute())) as f:
+    with file.open() as f:
         # some files may have macros that check for operatoring system or
         # compiler compatibilities. For now we ignore these as well.
         # We also need to ignore include statements made in comments
-        include_statements = []
+        include_statements = set()
         b_is_block_comment = False  # Lines that start with /*
         for line in f.readlines():
             if b_is_block_comment and line.endswith('*/'):
@@ -81,25 +109,47 @@ def create_single_file_dependency_list(file: Union[Path, str]):
 
                 re_match = include_statement_pattern.search(line)
 
+                # Split header on '/' to determine if it is in its parent
+                # directory
+
                 if not re_match:  # no matches found
                     continue
                 elif not re_match.group(1):
                     # Check if match with `<...>` is None
                     print(f"""Header file found
                             {str(file.absolute())}:{re_match.group(2)}""")
-                    include_statements.append(re_match.group(2)[1:-1])
+                    included_file = re_match.group(2)[1:-1]
                 else:
                     # since we have a match and first group is non-empty we
                     # append
                     print(f"""Header file found
                             {str(file.absolute())}:{re_match.group(1)}""")
-                    include_statements.append(re_match.group(1)[1:-1])
-    return include_statements
+                    included_file = re_match.group(1)[1:-1]
+
+                included_file = included_file.split('/')
+                if len(included_file) == 1:
+                    # TODO: Check that file is not std header
+                    include_statements.update(CppFileObject(file.path_to_file,
+                                                            included_file))
+                elif '..' in included_file:
+                    print(f"""No relative path searches provided yet 
+                              {included_file.join()}""")
+                    cfo = CppFileObject(file.path_to_file,
+                                        included_file.join())
+                    include_statements.update(cfo)
+                else:
+                    # We assume the provided path starts from the project 
+                    # top directory
+                    path_to_file = Path(included_file[:-1].join())
+                    file_name = included_file[-1]
+                    include_statements.update(CppFileObject(path_to_file,
+                                                            file_name))
+            return include_statements
 
 
 def output_dependency_tree_to_dot_file(
-        dep_tree: Dict[Union[Path, str], List[Union[Path, str]]],
-        output_name: Optional[Union[Path, str]]):
+        dep_tree: Dict[Union[Path, str], Set[CppFileObject]],
+        output_name: Optional[Union[Path, str]]) -> None:
     """
     Goes through dictionary of files gathered from recursive search of
     directory and prints all the nodes it will be attached to in file
@@ -117,10 +167,9 @@ def output_dependency_tree_to_dot_file(
         print("None dictionary object passed. Exiting...")
         quit()
 
+    # FIXME: I should accept costum path
     if not output_name:
         output_name = Path('./includes_tree_output.dot').absolute()
-
-    # print(f'Output file is: {str(output_name)}')
 
     # TODO: Need to colorize output.
     #       E.g. header files are blue, translation units red
@@ -129,16 +178,16 @@ def output_dependency_tree_to_dot_file(
     #       somewhere
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
-        _ = [[
-            f.write(f'\t"{key}" -- "{entry}";\n')
-            for entry in dep_list]
-            for key, dep_list in dep_tree.items()]
+        _ = [[f.write(f'\t"{key}" -- "{entry}";\n')
+              for entry in dep_list]
+             for key, dep_list in dep_tree.items()]
         f.write("}")
 
 
 def generate_dependency_tree(
-        files_in_project: List[Path],
-        keep_std_files: bool = True):
+        files_in_project: Set[CppFileObject],
+        keep_std_files: bool = True
+     ) -> Dict[CppFileObject, Set[CppFileObject]]:
     """
     Creates a dictionary with file name as key and its dependency tree as the
     value
@@ -165,7 +214,8 @@ def generate_dependency_tree(
                 if line])
 
     def match_headers_with_found_headers(
-            dependency_tree: Dict[str, List[str]]):
+            dependency_tree: Dict[str, List[str]]
+         ) -> Dict[str, str]:
         """Helper function to avoid file duplication in dependency tree"""
         set_of_headers = set()
         for key, value in dependency_tree.items():
