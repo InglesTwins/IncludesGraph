@@ -129,6 +129,7 @@ def create_single_file_dependency_list(
                 included_file = included_file.split('/')
                 if len(included_file) == 1:
                     # TODO: Check that file is not std header
+<<<<<<< HEAD
                     include_statements.update([CppFileObject(file.path_to_file,
                                                              included_file)])
                 elif '..' in included_file:
