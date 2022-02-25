@@ -1,9 +1,9 @@
 from pathlib import Path
 import sys
 
-directory = Path(__file__).absolute()
-sys.path.append(directory.parent.parent)
 
+directory = Path(__file__).absolute()
+sys.path.append(str(directory.parent.parent))
 import build_dependency_tree as ig
 
 if __name__ == '__name__':

@@ -4,8 +4,9 @@ import sys
 import re
 from pathlib import Path
 from typing import Optional
-from typing import List, Dict
+from typing import List, Dict, Union
 
+import argparse
 
 def extract_files_from_directory():
     """FUnction recurses through the directory to find all file-like objects"""
@@ -37,7 +38,7 @@ def separate_headers_and_implementations(files_in_dir: List[Path]):
 # KI: No, but also don't want it to be a global variable. This screams classes
 #
 # match either the pattern `<...>` or `"..."`
-include_statement_pattern = re.compile
+include_statement_pattern = re.compile(r"<.+>|\".+\"")
 def create_single_file_dependency_list(file: Union[Path, str]):
     """
     Go through header files and implementation files and scan for `#include`
@@ -64,7 +65,7 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                 else:
                     continue
             else:
-                if line.contains('/*'):
+                if '/*' in line:
                     b_is_block_comment = True
                     continue
                 elif line.strip()[0:2] == '//':
@@ -76,19 +77,17 @@ def create_single_file_dependency_list(file: Union[Path, str]):
                     # We only expect one entry in the list
                     if re_match: # first matching group is empty
                         continue
-                    else:
-                        if not re_match.group(1): # Check if match with `<...>` is empty
-                            include_statements.append(re_match.group(2))
-                        else: # since we have a match and first group is non-empty we
-                              # apend
-                            include_statements.append(re_match.group(1))
-                    else:
-                        continue
+                    elif not re_match.group(1): # Check if match with `<...>` is empty
+                        include_statements.append(re_match.group(2))
+                    else:  # since we have a match and first group is non-empty we
+                           # apend
+                        include_statements.append(re_match.group(1))
+                    continue
         return include_statements
 
 
 def output_dependency_tree_to_dot_file(
-        dep_tree: Dict[List[Union[Path, str]]], 
+        dep_tree: Dict[List[Union[Path, str]]],
         output_name: Optional[Union[Path, str]]
     ):
     """
@@ -109,7 +108,7 @@ def output_dependency_tree_to_dot_file(
 
     if not output_name:
         output_name = 'includes_tree_output.dot'
-    
+
     # TODO: Need to colorize output. 
     #       E.g. header files are blue, translation units red
     #       Standard Template Library files are different shaped bubbles, etc
@@ -139,5 +138,6 @@ def generate_dependency_tree(files_in_project: List[Path], keep_std_files: bool=
     return dict(
                 (file, create_single_file_dependency_list(file))
                 for file in files_in_project
-                if (not file in [*C_std_files, *Cpp_std_fiels]) or keep_std_files # complicated logica D=
-            )
+                if file not in [C_std_files, Cpp_std_files]
+    ) or keep_std_files  # complicated logica D=
+
