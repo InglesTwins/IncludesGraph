@@ -8,6 +8,7 @@ from typing import List, Dict, Union
 
 import argparse
 
+# TODO (Alex 2-24-22) Refactor dir/file extraction
 def extract_files_from_directory():
     """FUnction recurses through the directory to find all file-like objects"""
 
