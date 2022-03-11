@@ -30,6 +30,8 @@ class CppFileObject():  # FIXME: I belong in a separate file
     def open(self) -> TextIOWrapper:
         return open(str(self.path_to_file) + '/' + self.file_name, 'r')
 
+    def __repr__(self):
+        return str(self.path_to_file / self.file_name)
 
 def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
     """FUnction recurses through the directory to find all file-like objects"""
@@ -54,8 +56,9 @@ def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
         else:
             if is_cpp_file(dir_or_file.name):
                 # print(f'Appending file: {str(dir_or_file.absolute())}')
-                set_o_files.update([CppFileObject(dir_or_file.parent,
-                                                  dir_or_file.name)])
+                temp_obj = CppFileObject(dir_or_file.parent, dir_or_file.name)
+                print(str(temp_obj))
+                set_o_files.update([temp_obj])
         return set_o_files
 
     def flatten_set(
@@ -67,7 +70,7 @@ def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
     # We want to keep track of how to get to the file
     # therefore we keep the path to the file
     return flatten_set(
-            [extract_files(Path(directory), {}) for directory in set_o_dirs])
+            [extract_files(Path(directory), set()) for directory in set_o_dirs])
 
 
 # NOTE: Do we want to make re.Pattern object a function parameter?
@@ -117,34 +120,36 @@ def create_single_file_dependency_list(
                 elif not re_match.group(1):
                     # Check if match with `<...>` is None
                     print(f"""Header file found
-                            {str(file.absolute())}:{re_match.group(2)}""")
+                            {str(file)}:{re_match.group(2)}""")
                     included_file = re_match.group(2)[1:-1]
                 else:
                     # since we have a match and first group is non-empty we
                     # append
                     print(f"""Header file found
-                            {str(file.absolute())}:{re_match.group(1)}""")
+                            {str(file)}:{re_match.group(1)}""")
                     included_file = re_match.group(1)[1:-1]
 
                 included_file = included_file.split('/')
                 if len(included_file) == 1:
                     # TODO: Check that file is not std header
-                    include_statements.update([CppFileObject(file.path_to_file,
-                                                             included_file)])
+                    include_statements.update(
+                        [CppFileObject(file.path_to_file,
+                                       ''.join(included_file))])
                 elif '..' in included_file:
                     print(f"""No relative path searches provided yet
-                              {included_file.join()}""")
+                              {''.join(included_file)}""")
                     cfo = CppFileObject(file.path_to_file,
-                                        included_file.join())
+                                        ''.join(included_file))
                     include_statements.update([cfo])
                 else:
                     # We assume the provided path starts from the project
                     # top directory
-                    path_to_file = Path(included_file[:-1].join())
+                    path_to_file = Path(''.join(included_file[:-1]))
                     file_name = included_file[-1]
-                    include_statements.update([CppFileObject(path_to_file,
-                                                             file_name)])
-            return include_statements
+                    include_statements.update(
+                        [CppFileObject(Path[path_to_file],
+                                       file_name)])
+    return include_statements
 
 
 def output_dependency_tree_to_dot_file(
@@ -219,8 +224,10 @@ def generate_dependency_tree(
         """Helper function to avoid file duplication in dependency tree"""
         set_of_headers = set()
         for key, value in dependency_tree.items():
-            set_of_headers.update([value])
+            if len(value) != 0:
+                set_of_headers.update([entry for entry in value])
 
+        # quit()
         print(set_of_headers)
 
         # conversion to header files as they actually appear in code
@@ -233,7 +240,7 @@ def generate_dependency_tree(
             else:
                 b_matched = False
                 for header in set_of_headers:
-                    if str(key).endswith(header):
+                    if str(key).endswith(str(header)):
                         # Seems we need to create some sort of class that
                         # stores whether a specific header has already been
                         # matched
@@ -242,7 +249,7 @@ def generate_dependency_tree(
                         if str(key) in key_for_headers:
                             print(f"""Header file {key} is duplicated, previous
                                   value has been overwitten""")
-                        key_for_headers[str(key)] = str(key)[-len(header):]
+                        key_for_headers[str(key)] = str(key)[-len(str(header)):]
                 if not b_matched:
                     print(f"File: {key} not matched to any include statement")
                     key_for_headers[str(key)] = str(key)
