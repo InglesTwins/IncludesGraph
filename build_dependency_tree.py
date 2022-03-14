@@ -9,6 +9,10 @@ from io import TextIOWrapper
 
 # TODO: Move current print statements to a log output file
 # TODO: Use uniform function argument list style
+# TODO: Use pathlib.relative_to function to output .DOT file with
+#       with shorter names. This means we have to keep the "project"
+#       stored somewhere
+# TODO: Check iterative directory search when collecting cpp files
 
 # IDEA: We can keep the entire directory structure stored for the project
 #       and then determine a metric to compare how well a given file matches
@@ -134,20 +138,20 @@ def create_single_file_dependency_list(
                     # TODO: Check that file is not std header
                     include_statements.update(
                         [CppFileObject(file.path_to_file,
-                                       ''.join(included_file))])
+                                       '/'.join(included_file))])
                 elif '..' in included_file:
                     print(f"""No relative path searches provided yet
-                              {''.join(included_file)}""")
+                              {'/'.join(included_file)}""")
                     cfo = CppFileObject(file.path_to_file,
-                                        ''.join(included_file))
+                                        '/'.join(included_file))
                     include_statements.update([cfo])
                 else:
                     # We assume the provided path starts from the project
                     # top directory
-                    path_to_file = Path(''.join(included_file[:-1]))
+                    path_to_file = Path('/'.join(included_file[:-1]))
                     file_name = included_file[-1]
                     include_statements.update(
-                        [CppFileObject(Path[path_to_file],
+                        [CppFileObject(Path(path_to_file),
                                        file_name)])
     return include_statements
 
