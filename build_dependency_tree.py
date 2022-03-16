@@ -195,7 +195,7 @@ def output_dependency_tree_to_dot_file(
     #       Standard Template Library files are different shaped bubbles, etc
     #       Of course this will require a key of some sort to be documentd
     #       somewhere
-    def dir_rep(path: CppFileObject, set_o_dirs: Set[Path]) -> str:
+    def dir_rep(path: str, set_o_dirs: Set[Path]) -> str:
         for d in set_o_dirs:
             path = str(path).replace(str(d.absolute()), '')
         return path
