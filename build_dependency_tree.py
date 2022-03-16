@@ -4,7 +4,7 @@ import sys
 import re
 from pathlib import Path
 from typing import Optional, Union
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple
 from io import TextIOWrapper
 
 # TODO: Move current print statements to a log output file
@@ -23,7 +23,7 @@ class CppFileObject():  # FIXME: I belong in a separate file
     """
     This acts simply as a way to encapsulate cpp files
     Cpp files are distinguished by the path to the file.
-    This helps resolve ambiguities for files with the same name but in 
+    This helps resolve ambiguities for files with the same name but in
     different directories when making the dependency tree
     """
 
@@ -37,8 +37,13 @@ class CppFileObject():  # FIXME: I belong in a separate file
     def __repr__(self):
         return str(self.path_to_file / self.file_name)
 
-def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
-    """FUnction recurses through the directory to find all file-like objects"""
+
+def extract_files_from_directory(
+        set_o_dirs: Set[Path]) -> Tuple[Set[CppFileObject], Set[Path]]:
+    """
+    TODO: Improve function description
+    Function recurses through the directory to find all file-like objects
+    """
 
     def is_cpp_file(file: Union[Path, str]) -> bool:
         file_types = ('.c', '.cc', '.cpp', '.cxx', '.c++', '.C',
@@ -74,7 +79,8 @@ def extract_files_from_directory(set_o_dirs: Set[Path]) -> Set[CppFileObject]:
     # We want to keep track of how to get to the file
     # therefore we keep the path to the file
     return flatten_set(
-            [extract_files(Path(directory), set()) for directory in set_o_dirs])
+            [extract_files(Path(directory), set())
+             for directory in set_o_dirs]), set_o_dirs
 
 
 # NOTE: Do we want to make re.Pattern object a function parameter?
@@ -137,12 +143,12 @@ def create_single_file_dependency_list(
                 if len(included_file) == 1:
                     # TODO: Check that file is not std header
                     include_statements.update(
-                        [CppFileObject(file.path_to_file,
+                        [CppFileObject(file.path_to_file.absolute(),
                                        '/'.join(included_file))])
                 elif '..' in included_file:
                     print(f"""No relative path searches provided yet
                               {'/'.join(included_file)}""")
-                    cfo = CppFileObject(file.path_to_file,
+                    cfo = CppFileObject(file.path_to_file.absolute(),
                                         '/'.join(included_file))
                     include_statements.update([cfo])
                 else:
@@ -158,6 +164,7 @@ def create_single_file_dependency_list(
 
 def output_dependency_tree_to_dot_file(
         dep_tree: Dict[Union[Path, str], Set[CppFileObject]],
+        set_o_dirs: Set[Path],
         output_name: Optional[Union[Path, str]]) -> None:
     """
     Goes through dictionary of files gathered from recursive search of
@@ -168,6 +175,9 @@ def output_dependency_tree_to_dot_file(
 
     :param dep_tree:    dictionary with files in project as keys and list
                         of their dependencies as value
+    :param set_o_dirs:  the dirs traversed to find all header files, used
+                        to shorten the names of outputted strings in dot 
+                        file
     :param output_name: name of output file or path to output file
     """
     if not isinstance(dep_tree, dict):
@@ -185,9 +195,14 @@ def output_dependency_tree_to_dot_file(
     #       Standard Template Library files are different shaped bubbles, etc
     #       Of course this will require a key of some sort to be documentd
     #       somewhere
+    def dir_rep(path: CppFileObject, set_o_dirs: Set[Path]) -> str:
+        for d in set_o_dirs:
+            path = str(path).replace(str(d.absolute()), '')
+        return path
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
-        _ = [[f.write(f'\t"{key}" -- "{entry}";\n')
+        _ = [[f.write(f'''\t"{dir_rep(key, set_o_dirs)}"
+                          -- "{dir_rep(entry, set_o_dirs)}";\n''')
               for entry in dep_list]
              for key, dep_list in dep_tree.items()]
         f.write("}")
@@ -253,7 +268,8 @@ def generate_dependency_tree(
                         if str(key) in key_for_headers:
                             print(f"""Header file {key} is duplicated, previous
                                   value has been overwitten""")
-                        key_for_headers[str(key)] = str(key)[-len(str(header)):]
+                        key_for_headers[str(key)] = \
+                            str(key)[-len(str(header)):]
                 if not b_matched:
                     print(f"File: {key} not matched to any include statement")
                     key_for_headers[str(key)] = str(key)
