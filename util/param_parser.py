@@ -4,6 +4,7 @@ from sys import argv
 from pathlib import Path
 
 
+
 class IncludesGraphCmdLineParsingError(Exception):
     """The base of all Errors from command Line parsing in Includes Graph"""
 
@@ -16,8 +17,8 @@ class ParamParser:
     flags: Dict[str, Any]
     dirs: List[Path]
 
-    possible_options: List[str]
-    possible_flags: Dict[str, Any]
+    possible_options: List[Dict[str, Any]]
+    possible_flags: List[Dict[str, Any]]
 
     def __init__(self):
 
@@ -64,4 +65,50 @@ class ParamParser:
 
     def populate_possibles(self) -> None:
         """Generate all the possible values that can be passed through CLI"""
+        self.possible_options.extend([{
+            "-o": {
+                "arg": "dependency_tree",
+                "arg_req": True,
+                "description": "Pass the specific name of the outputted image file",
+                "usage": "-o <file_name>",
+                "example": "ig <dirs> -o test -> test.pdf"
+            },
+            "-F": {
+                "arg": "pdf",
+                "arg_req": True,
+                "description": "Pass specific file type output image will take",
+                "usage": "-F <file_ending>",
+                "example": "ig <dirs> -F png -> <file?.png"
+            },
+            "-U": {
+                "arg": Path,
+                "arg_req": True,
+                "description": "Pass specific path to existing dot/json file denoting dependency image",
+                "usage": "-U <file>",
+                "example": "ig -U example.dot -> *Generates dependency_tree.pdf*"
+            }
 
+        }])
+        self.possible_flags.extend(([{
+            "--output": {
+                "arg": "dependency_tree",
+                "arg_req": True,
+                "description": "Pass specific name output image file",
+                "usage": "--output <file_name>",
+                "example": "ig <dirs> -o test -> test.pdf"
+            },
+            "--file-type": {
+                "arg": "pdf",
+                "arg_req": True,
+                "description": "Pass specific file type output image will take",
+                "usage": "--file-type <file_ending>",
+                "example": "ig <dirs> -F png -> <file?.png"
+            },
+            "--use-existing": {
+                "arg": "compile-command.json",
+                "arg_req": True,
+                "description": "Pass specific path to existing dot/json file denoting dependency image",
+                "usage": "--use-existing <file>",
+                "example": "ig --use-existing example.dot -> *Generates dependency_tree.pdf*"
+            }
+        }]))
