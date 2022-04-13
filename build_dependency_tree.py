@@ -1,11 +1,11 @@
 """Main file to extract dependencies to model the include graph"""
 
-import sys
 import re
 from pathlib import Path
 from typing import Optional, Union
 from typing import List, Dict, Set, Tuple
 from io import TextIOWrapper
+import logging as log
 
 # TODO: Move current print statements to a log output file
 # TODO: Use uniform function argument list style
@@ -18,6 +18,8 @@ from io import TextIOWrapper
 #       and then determine a metric to compare how well a given file matches
 #       with a file of the same name in multiple directories
 
+log.basicConfig(filename="log.out", level=log.INFO)
+
 
 class CppFileObject():  # FIXME: I belong in a separate file
     """
@@ -27,15 +29,21 @@ class CppFileObject():  # FIXME: I belong in a separate file
     different directories when making the dependency tree
     """
 
-    def __init__(self, path_to_file: Path, file_name: str) -> None:
+    def __init__(self, path_to_file: Path,
+                 file_name: str, is_std: bool = False) -> None:
         self.path_to_file = path_to_file
         self.file_name = file_name
+        self.is_std = is_std
 
     def open(self) -> TextIOWrapper:
-        return open(str(self.path_to_file) + '/' + self.file_name, 'r')
+        if not self.is_std:
+            return open(str(self.path_to_file / self.file_name), 'r')
 
     def __repr__(self):
-        return str(self.path_to_file / self.file_name)
+        if self.is_std:
+            return self.file_name
+        else:
+            return str(self.path_to_file / self.file_name)
 
 
 def extract_files_from_directory(
@@ -59,14 +67,14 @@ def extract_files_from_directory(
                       set_o_files: Set[CppFileObject]
                       ) -> Set[CppFileObject]:
         if dir_or_file.is_dir():
-            # print(f'In dir: {str(dir_or_file.absolute())}')
+
             for path in dir_or_file.glob("*"):
                 extract_files(path, set_o_files)
         else:
             if is_cpp_file(dir_or_file.name):
-                # print(f'Appending file: {str(dir_or_file.absolute())}')
                 temp_obj = CppFileObject(dir_or_file.parent, dir_or_file.name)
-                print(str(temp_obj))
+                log.info("Extracted {} from {}".
+                         format(str(temp_obj), str(dir_or_file)))
                 set_o_files.update([temp_obj])
         return set_o_files
 
@@ -90,8 +98,9 @@ def extract_files_from_directory(
 include_statement_pattern = re.compile(r"(<.+?>)|(\".+?\")")
 
 
-def create_single_file_dependency_list(
-        file: CppFileObject
+def create_single_file_dependency_set(
+        file: CppFileObject,
+        std_headers: List[str]
      ) -> Set[CppFileObject]:
     """
     Go through header files and implementation files and scan for `#include`
@@ -129,27 +138,37 @@ def create_single_file_dependency_list(
                     continue
                 elif not re_match.group(1):
                     # Check if match with `<...>` is None
-                    print(f"""Header file found
-                            {str(file)}:{re_match.group(2)}""")
+                    log.info("Header file found {}:{}".
+                             format(str(file), re_match.group(2)))
                     included_file = re_match.group(2)[1:-1]
                 else:
                     # since we have a match and first group is non-empty we
                     # append
-                    print(f"""Header file found
-                            {str(file)}:{re_match.group(1)}""")
+                    log.info("Header file found {}:{}".
+                             format(str(file), re_match.group(1)))
                     included_file = re_match.group(1)[1:-1]
 
                 included_file = included_file.split('/')
                 if len(included_file) == 1:
                     # TODO: Check that file is not std header
+                    if included_file[0] in std_headers:
+                        log.info("Standard library header found: {}".
+                                 format(included_file))
                     include_statements.update(
+                        [CppFileObject(Path(''), included_file[0], True)]
+                        if included_file[0] in std_headers else
                         [CppFileObject(file.path_to_file.absolute(),
                                        '/'.join(included_file))])
                 elif '..' in included_file:
-                    print(f"""No relative path searches provided yet
-                              {'/'.join(included_file)}""")
+                    log.info("Relative path include statment found {}".
+                             format('/'.join(included_file)))
+                    # This is a patch for now to resolve relative paths
+                    p = Path(file.path_to_file.absolute() /
+                             '/'.join(included_file)).resolve()
+                    resolved_included_file = str(p).replace(
+                        str(file.path_to_file.absolute()), '')
                     cfo = CppFileObject(file.path_to_file.absolute(),
-                                        '/'.join(included_file))
+                                        resolved_included_file)
                     include_statements.update([cfo])
                 else:
                     # We assume the provided path starts from the project
@@ -176,14 +195,16 @@ def output_dependency_tree_to_dot_file(
     :param dep_tree:    dictionary with files in project as keys and list
                         of their dependencies as value
     :param set_o_dirs:  the dirs traversed to find all header files, used
-                        to shorten the names of outputted strings in dot 
+                        to shorten the names of outputted strings in dot
                         file
     :param output_name: name of output file or path to output file
     """
     if not isinstance(dep_tree, dict):
         # For cleaner debugging messages, only keep while still developing
         # program
-        print("None dictionary object passed. Exiting...")
+        log.error("None dictionary object passed. Exiting...")
+        print("An error occurred while processing. "
+              + "Please see log for more information.")
         quit()
 
     # FIXME: I should accept costum path
@@ -197,12 +218,13 @@ def output_dependency_tree_to_dot_file(
     #       somewhere
     def dir_rep(path: str, set_o_dirs: Set[Path]) -> str:
         for d in set_o_dirs:
-            path = str(path).replace(str(d.absolute()), '')
+            path = str(path).replace(str(d.resolve()) + '/', '')
         return path
     with open(str(output_name.absolute()), 'w') as f:
         f.write("graph {\n")
-        _ = [[f.write(f'''\t"{dir_rep(key, set_o_dirs)}"
-                          -- "{dir_rep(entry, set_o_dirs)}";\n''')
+        _ = [[f.write('\t"{}" -- "{}";\n'.format(
+                          dir_rep(key, set_o_dirs),
+                          dir_rep(entry, set_o_dirs)))
               for entry in dep_list]
              for key, dep_list in dep_tree.items()]
         f.write("}")
@@ -227,10 +249,10 @@ def generate_dependency_tree(
     pwd = Path(__file__).absolute().parent
     with open(f"{str(pwd)}/util/C_std_headers.txt", 'r') as f:
         std_files = [
-                line.strip()
+                line.strip()  # strip to remove '\n' char
                 for line in f.readlines()
                 if line
-                ]  # strip to remove '\n' char
+                ]
     with open(f"{str(pwd)}/util/Cpp_std_headers.txt", 'r') as f:
         std_files.extend([
                 line.strip()
@@ -238,7 +260,7 @@ def generate_dependency_tree(
                 if line])
 
     def match_headers_with_found_headers(
-            dependency_tree: Dict[str, List[str]]
+            dependency_tree: Dict[str, Set[CppFileObject]]
          ) -> Dict[str, str]:
         """Helper function to avoid file duplication in dependency tree"""
         set_of_headers = set()
@@ -246,15 +268,12 @@ def generate_dependency_tree(
             if len(value) != 0:
                 set_of_headers.update([entry for entry in value])
 
-        # quit()
-        print(set_of_headers)
-
         # conversion to header files as they actually appear in code
         key_for_headers = {}
         for key in dependency_tree.keys():
-            print(f"Comparing file: {key}")
+            log.info(f"Comparing file: {key}")
             if '.c' in str(key).lower():
-                print("File is a translation unit")
+                log.info("File is a translation unit")
                 key_for_headers[str(key)] = str(key)
             else:
                 b_matched = False
@@ -264,20 +283,22 @@ def generate_dependency_tree(
                         # stores whether a specific header has already been
                         # matched
                         b_matched = True
-                        print("File matched to existing header")
+                        log.info("File matched to existing header")
                         if str(key) in key_for_headers:
-                            print(f"""Header file {key} is duplicated, previous
-                                  value has been overwitten""")
+                            s1 = "Header file {} is duplicated, previous "
+                            s2 = "value has been overwitten"
+                            log.info((s1 + s2).format(key))
                         key_for_headers[str(key)] = \
                             str(key)[-len(str(header)):]
                 if not b_matched:
-                    print(f"File: {key} not matched to any include statement")
+                    log.info(
+                        f"File: {key} not matched to any include statement")
                     key_for_headers[str(key)] = str(key)
 
         return key_for_headers
 
     temp_dict = dict(
-                (str(file), create_single_file_dependency_list(file))
+                (str(file), create_single_file_dependency_set(file, std_files))
                 for file in files_in_project
                 if file not in std_files
                 or keep_std_files  # complicated logic
